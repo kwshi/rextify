@@ -1,5 +1,5 @@
 use super::error::ErrorData;
-use crate::ast;
+use crate::syntax::token;
 
 #[derive(Copy, Clone)]
 pub enum State {
@@ -12,53 +12,66 @@ pub enum State {
     MacroStart,
     MacroNormal,
     MacroSpecial,
-    Literal(ast::TokenData),
+    Literal(token::TokenData),
+    DollarSingle,
+    DollarDouble,
     Eof,
     Fail,
     Exit,
 }
 
 impl State {
-    pub fn transition(self, c: Option<char>) -> (Self, Result<Option<ast::TokenData>, ErrorData>) {
+    pub fn transition(
+        self,
+        c: Option<char>,
+    ) -> (Self, Result<Option<token::TokenData>, ErrorData>) {
         match self {
             State::Start => self.default_transition(c, None),
             State::Par => match c {
                 Some(c) if c.is_ascii_whitespace() => (State::Par, Ok(None)),
-                _ => self.default_transition(c, Some(ast::TokenData::Par)),
+                _ => self.default_transition(c, Some(token::TokenData::Par)),
             },
             State::Newline => match c {
                 Some('\n') => (State::Par, Ok(None)),
                 Some(c) if c.is_ascii_whitespace() => (State::Whitespace, Ok(None)),
-                _ => self.default_transition(c, Some(ast::TokenData::Whitespace)),
+                _ => self.default_transition(c, Some(token::TokenData::Whitespace)),
             },
             State::Whitespace => match c {
                 Some(c) if c.is_ascii_whitespace() => (State::Whitespace, Ok(None)),
-                _ => self.default_transition(c, Some(ast::TokenData::Whitespace)),
+                _ => self.default_transition(c, Some(token::TokenData::Whitespace)),
             },
-            State::Plain => self.default_transition(c, Some(ast::TokenData::Plain)),
+            State::Plain => self.default_transition(c, Some(token::TokenData::Plain)),
             State::Comment => match c {
-                None => (State::Eof, Ok(Some(ast::TokenData::Comment))),
-                Some('\n') => (State::Start, Ok(Some(ast::TokenData::Comment))),
+                None => (State::Eof, Ok(Some(token::TokenData::Comment))),
+                Some('\n') => (State::Start, Ok(Some(token::TokenData::Comment))),
                 Some(_) => (State::Comment, Ok(None)),
+            },
+            State::DollarSingle => match c {
+                Some('$') => (State::DollarDouble, Ok(None)),
+                _ => self.default_transition(c, Some(token::TokenData::DollarSingle)),
+            },
+            State::DollarDouble => match c {
+                Some('$') => (State::Fail, Err(ErrorData::TripleDollar)),
+                _ => self.default_transition(c, Some(token::TokenData::DollarDouble)),
             },
             State::MacroStart => match c {
                 None => (State::Fail, Err(ErrorData::UnexpectedEof)),
                 Some(c) => match c {
                     '!' | ',' | ':' | ';' | '%' | '&' | '{' | '}' | '(' | ')' | '\\' | '['
-                    | ']' => (State::MacroSpecial, Ok(None)),
+                    | ']' | '$' => (State::MacroSpecial, Ok(None)),
                     _ if c.is_ascii_alphabetic() => (State::MacroNormal, Ok(None)),
                     _ => (State::Fail, Err(ErrorData::UnrecognizedMacroChar)),
                 },
             },
             State::MacroNormal => match c {
-                None => (State::Eof, Ok(Some(ast::TokenData::MacroNormal))),
+                None => (State::Eof, Ok(Some(token::TokenData::MacroNormal))),
                 Some(c) if c.is_ascii_alphabetic() => (State::MacroNormal, Ok(None)),
                 Some(c) if c.is_ascii_whitespace() => (State::Start, Ok(None)),
-                Some(_) => self.default_transition(c, Some(ast::TokenData::MacroNormal)),
+                Some(_) => self.default_transition(c, Some(token::TokenData::MacroNormal)),
             },
             State::Literal(token) => self.default_transition(c, Some(token)),
-            State::MacroSpecial => self.default_transition(c, Some(ast::TokenData::MacroSpecial)),
-            State::Eof => (State::Exit, Ok(Some(ast::TokenData::Eof))),
+            State::MacroSpecial => self.default_transition(c, Some(token::TokenData::MacroSpecial)),
+            State::Eof => (State::Exit, Ok(Some(token::TokenData::Eof))),
             State::Fail => (State::Fail, Err(ErrorData::Failed)),
             State::Exit => (State::Exit, Err(ErrorData::Exited)),
         }
@@ -67,20 +80,23 @@ impl State {
     fn default_transition(
         &self,
         c: Option<char>,
-        ok: Option<ast::TokenData>,
-    ) -> (Self, Result<Option<ast::TokenData>, ErrorData>) {
+        ok: Option<token::TokenData>,
+    ) -> (Self, Result<Option<token::TokenData>, ErrorData>) {
         let ok = |state: State| (state, Ok(ok));
         match c {
             None => ok(State::Eof),
             Some(c) => match c {
                 '\\' => ok(State::MacroStart),
+                '$' => ok(State::DollarSingle),
                 '%' => ok(State::Comment),
-                '{' => ok(State::Literal(ast::TokenData::BraceL)),
-                '}' => ok(State::Literal(ast::TokenData::BraceR)),
-                '[' | ']' | ',' | '.' | '/' | '(' | ')' | ':' | ';' | '&' | '=' | '-' | '+'
-                | '_' | '*' | '`' | '\'' | '^' | '"' | '<' | '>' | '!' | '?' | '~' | '@' => {
-                    ok(State::Plain)
-                }
+                '{' => ok(State::Literal(token::TokenData::BraceL)),
+                '}' => ok(State::Literal(token::TokenData::BraceR)),
+                ',' => ok(State::Literal(token::TokenData::Comma)),
+                '[' => ok(State::Literal(token::TokenData::BracketL)),
+                ']' => ok(State::Literal(token::TokenData::BracketR)),
+                '=' => ok(State::Literal(token::TokenData::Equal)),
+                '.' | '/' | '(' | ')' | ':' | ';' | '&' | '-' | '+' | '_' | '*' | '`' | '\''
+                | '^' | '"' | '<' | '>' | '!' | '?' | '~' | '@' => ok(State::Plain),
                 '\n' => ok(State::Newline),
                 _ if c.is_ascii_whitespace() => ok(State::Whitespace),
                 _ if c.is_ascii_alphanumeric() => ok(State::Plain),

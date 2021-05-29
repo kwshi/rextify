@@ -1,11 +1,11 @@
 use super::{error::Error, state::State};
-use crate::{ast, source};
+use crate::{source, syntax::token};
 
 pub struct Lexer<'src> {
     src: &'src source::Source<'src>,
-    chars: std::str::CharIndices<'src>,
+    chars: std::str::Chars<'src>,
     loc: source::Location,
-    start: usize,
+    start: source::Location,
     state: State,
 }
 
@@ -13,29 +13,29 @@ impl<'a, 'src> Lexer<'src> {
     pub fn new(src: &'src source::Source<'src>) -> Lexer<'src> {
         Lexer {
             src,
-            chars: src.char_indices(),
-            start: 0,
+            chars: src.chars(),
             state: State::Start,
+            start: source::Location::start(),
             loc: source::Location::start(),
         }
     }
 
-    fn step(&'a mut self) -> Result<Option<ast::Token<'src>>, Error> {
-        let (pos, c) = match self.chars.next() {
-            None => (self.src.len(), None),
-            Some((i, c)) => (i, Some(c)),
-        };
+    pub fn source(&self) -> &'src source::Source<'src> {
+        self.src
+    }
 
+    fn step(&'a mut self) -> Result<Option<token::Token<'src>>, Error> {
+        let c = self.chars.next();
         let (state, result) = self.state.transition(c);
         self.state = state;
 
         let result = match result {
             Err(data) => Err(Error::new(data, self.loc)),
             Ok(data) => Ok(data.map(|data| {
-                let start = self.start;
-                self.start = pos;
-                let src = self.src.slice(start, pos);
-                ast::Token::new(src, data)
+                let src = self.src.slice(&self.start, &self.loc);
+                let token = token::Token::new(data, src, self.start);
+                self.start = self.loc;
+                token
             })),
         };
 
@@ -46,7 +46,7 @@ impl<'a, 'src> Lexer<'src> {
         result
     }
 
-    pub fn next(&'a mut self) -> Result<ast::Token<'src>, Error> {
+    pub fn next(&'a mut self) -> Result<token::Token<'src>, Error> {
         loop {
             if let Some(token) = self.step()? {
                 return Ok(token);

@@ -12,16 +12,16 @@ impl<'src> Source<'src> {
         Source { content, lines }
     }
 
-    pub fn char_indices(&self) -> std::str::CharIndices {
-        self.content.char_indices()
+    pub fn chars(&self) -> std::str::Chars {
+        self.content.chars()
     }
 
     pub fn len(&self) -> usize {
         self.content.len()
     }
 
-    pub fn slice(&self, start: usize, end: usize) -> &str {
-        &self.content[start..end]
+    pub fn slice(&self, start: &location::Location, end: &location::Location) -> &str {
+        &self.content[start.pos()..end.pos()]
     }
 
     pub fn pprint_loc(&self, loc: location::Location) {

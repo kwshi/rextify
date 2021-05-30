@@ -9,6 +9,8 @@ pub struct Parser<'src> {
     peek: Option<token::Token<'src>>,
 }
 
+// TODO pure, state-based parser?
+
 impl<'a, 'src> Parser<'src> {
     pub fn new(lexer: lexer::Lexer<'src>) -> Self {
         Parser { lexer, peek: None }
@@ -35,28 +37,13 @@ impl<'a, 'src> Parser<'src> {
         })
     }
 
-    //fn peek(&'a self) -> Result<()> {}
-
     fn parse_document_class(&'a mut self) -> Result<ast::DocumentClass<'src>, Error<'src>> {
         self.skip_whitespace()?;
         Self::expect_macro(self.next()?, "documentclass")?;
         let opts = self.parse_optional_opts()?;
         self.skip_whitespace()?;
 
-        let brace = self.next()?;
-        match brace.data() {
-            token::TokenData::BraceL => Ok(()),
-            _ => Err(Error::new(ErrorData::Misc("expecting BraceL"), brace.loc())),
-        }?;
-
-        let name = self.parse_ident()?;
-
-        let brace = self.next()?;
-        match brace.data() {
-            token::TokenData::BraceR => Ok(()),
-            _ => Err(Error::new(ErrorData::Misc("expecting BraceR"), brace.loc())),
-        }?;
-
+        let name = self.parse_group(|p| p.parse_ident())?;
         Ok(ast::DocumentClass { name, opts })
     }
 
@@ -68,8 +55,8 @@ impl<'a, 'src> Parser<'src> {
         self.skip_whitespace()?;
 
         loop {
+            // TODO get rid of close; simply parse until no more valid options?
             if close(self.peek()?) {
-                self.next()?;
                 return Ok(opts);
             }
 
@@ -83,12 +70,32 @@ impl<'a, 'src> Parser<'src> {
                     self.skip_whitespace()?;
                 }
                 _ if close(next) => {
-                    self.next()?;
                     return Ok(opts);
                 }
                 _ => return Err(Error::new(ErrorData::UnexpectedToken, next.loc())),
             }
         }
+    }
+
+    fn parse_group<T>(
+        &'a mut self,
+        f: impl Fn(&mut Self) -> Result<T, Error<'src>>,
+    ) -> Result<T, Error<'src>> {
+        let left = self.next()?;
+        match left.data() {
+            token::TokenData::BraceL => Ok(()),
+            _ => Err(Error::new(ErrorData::Misc("expecting BraceL"), left.loc())),
+        }?;
+
+        let body = f(self)?;
+
+        let right = self.next()?;
+        match right.data() {
+            token::TokenData::BraceR => Ok(()),
+            _ => Err(Error::new(ErrorData::Misc("expecting BraceR"), right.loc())),
+        }?;
+
+        Ok(body)
     }
 
     fn parse_opt(&'a mut self) -> Result<ast::Opt<'src>, Error<'src>> {
@@ -106,21 +113,41 @@ impl<'a, 'src> Parser<'src> {
     }
 
     fn parse_optional_opts(&'a mut self) -> Result<Vec<ast::Opt<'src>>, Error<'src>> {
-        let token = self.peek()?;
-        match token.data() {
+        self.parse_optional(|p| {
+            p.parse_opts(|close| match close.data() {
+                token::TokenData::BracketR => true,
+                _ => false,
+            })
+        })
+        .map(Option::unwrap_or_default)
+    }
+
+    fn parse_optional<T>(
+        &'a mut self,
+        f: impl Fn(&mut Self) -> Result<T, Error<'src>>,
+    ) -> Result<Option<T>, Error<'src>> {
+        let left = self.peek()?;
+        match left.data() {
             token::TokenData::BracketL => {
                 self.next()?;
                 self.skip_whitespace()?;
-                self.parse_opts(|close| match close.data() {
-                    token::TokenData::BracketR => true,
-                    _ => false,
-                })
             }
-            _ => Ok(Vec::new()),
+            _ => return Ok(None),
         }
-    }
 
-    //fn parse_group(&'a mut self)
+        let body = f(self)?;
+
+        let right = self.next()?;
+        match right.data() {
+            token::TokenData::BracketR => Ok(()),
+            _ => Err(Error::new(
+                ErrorData::Misc("expecting BracketR"),
+                right.loc(),
+            )),
+        }?;
+
+        Ok(Some(body)) // once told me the world is gonna roll me
+    }
 
     fn parse_preamble(&'a mut self) -> Result<ast::Preamble<'src>, Error<'src>> {
         let class = self.parse_document_class()?;

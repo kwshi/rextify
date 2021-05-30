@@ -99,16 +99,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "789da6d93f1b866ffe175afc5322a4d76c038605a1c3319bb57b06967ca98a36"
 
 [[package]]
-name = "linttex"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "console",
- "structopt",
- "thiserror",
-]
-
-[[package]]
 name = "proc-macro-error"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -164,6 +154,16 @@ name = "regex-syntax"
 version = "0.6.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f497285884f3fcff424ffc933e56d7cbca511def0c9831a7f9b5f6153e3cc89b"
+
+[[package]]
+name = "rextify"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "console",
+ "structopt",
+ "thiserror",
+]
 
 [[package]]
 name = "strsim"

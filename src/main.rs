@@ -14,8 +14,8 @@ enum Error {
 fn main() -> Result<(), Error> {
     let cmd = Cmd::from_args();
     let contents = std::fs::read_to_string(cmd.path)?;
-    let source = linttex::source::Source::new(&contents);
-    let mut lexer = linttex::lexer::Lexer::new(&source);
+    let source = rextify::source::Source::new(&contents);
+    let mut lexer = rextify::lexer::Lexer::new(&source);
     //loop {
     //    match lexer.next() {
     //        Ok(token) => {}
@@ -27,13 +27,13 @@ fn main() -> Result<(), Error> {
     //    }
     //}
 
-    let parser = linttex::parser::Parser::new(lexer);
+    let parser = rextify::parser::Parser::new(lexer);
     match parser.parse() {
         Ok(tree) => println!("{:#?}", tree),
         Err(err) => println!("{:#?}", err),
     }
 
-    println!("{}", std::mem::size_of::<linttex::syntax::ast::Root>());
+    println!("{}", std::mem::size_of::<rextify::syntax::ast::Root>());
 
     //loop {
     //    match lexer.next() {

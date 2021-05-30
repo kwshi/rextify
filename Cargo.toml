@@ -1,5 +1,5 @@
 [package]
-name = "linttex"
+name = "rextify"
 version = "0.1.0"
 authors = ["Kye Shi <shi.kye@gmail.com>"]
 edition = "2018"

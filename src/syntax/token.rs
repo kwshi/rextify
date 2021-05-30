@@ -19,8 +19,7 @@ pub enum TokenData {
     Plain,
     MacroNormal,
     MacroSpecial,
-    Whitespace,
-    Par,
+    Whitespace { par: bool },
     DollarSingle,
     DollarDouble,
     Comment,
@@ -39,9 +38,9 @@ impl<'src> Token<'src> {
         self.loc
     }
 
-    pub fn is_whitespace_like(&self) -> bool {
+    pub fn is_whitespace(&self) -> bool {
         match self.data {
-            TokenData::Whitespace | TokenData::Par => true,
+            TokenData::Whitespace { .. } => true,
             _ => false,
         }
     }
@@ -63,7 +62,7 @@ impl<'src> Token<'src> {
     pub fn is_ident(&self) -> bool {
         match self.data {
             TokenData::Plain => self.src.chars().all(|c| match c {
-                '-' | '_' | '\'' | '.' | '/' => true,
+                '-' | '_' | '\'' | '.' | '/' | '*' => true,
                 _ if c.is_ascii_alphanumeric() => true,
                 _ => false,
             }),

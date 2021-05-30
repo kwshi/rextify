@@ -28,7 +28,7 @@ impl<'a, 'src> Parser<'src> {
     }
 
     fn skip_whitespace(&'a mut self) -> Result<Option<token::Token<'src>>, Error<'src>> {
-        Ok(if self.peek()?.is_whitespace_like() {
+        Ok(if self.peek()?.is_whitespace() {
             Some(self.next()?)
         } else {
             None

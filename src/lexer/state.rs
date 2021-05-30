@@ -4,9 +4,7 @@ use crate::syntax::token;
 #[derive(Copy, Clone)]
 pub enum State {
     Start,
-    Newline,
-    Whitespace,
-    Par,
+    Whitespace { newlines: usize },
     Plain,
     Comment,
     MacroStart,
@@ -27,18 +25,18 @@ impl State {
     ) -> (Self, Result<Option<token::TokenData>, ErrorData>) {
         match self {
             State::Start => self.default_transition(c, None),
-            State::Par => match c {
-                Some(c) if c.is_ascii_whitespace() => (State::Par, Ok(None)),
-                _ => self.default_transition(c, Some(token::TokenData::Par)),
-            },
-            State::Newline => match c {
-                Some('\n') => (State::Par, Ok(None)),
-                Some(c) if c.is_ascii_whitespace() => (State::Whitespace, Ok(None)),
-                _ => self.default_transition(c, Some(token::TokenData::Whitespace)),
-            },
-            State::Whitespace => match c {
-                Some(c) if c.is_ascii_whitespace() => (State::Whitespace, Ok(None)),
-                _ => self.default_transition(c, Some(token::TokenData::Whitespace)),
+            State::Whitespace { newlines } => match c {
+                Some('\n') => (
+                    State::Whitespace {
+                        newlines: newlines + 1,
+                    },
+                    Ok(None),
+                ),
+                Some(c) if c.is_ascii_whitespace() => (State::Whitespace { newlines }, Ok(None)),
+                _ => self.default_transition(
+                    c,
+                    Some(token::TokenData::Whitespace { par: newlines >= 2 }),
+                ),
             },
             State::Plain => self.default_transition(c, Some(token::TokenData::Plain)),
             State::Comment => match c {
@@ -97,8 +95,8 @@ impl State {
                 '=' => ok(State::Literal(token::TokenData::Equal)),
                 '.' | '/' | '(' | ')' | ':' | ';' | '&' | '-' | '+' | '_' | '*' | '`' | '\''
                 | '^' | '"' | '<' | '>' | '!' | '?' | '~' | '@' => ok(State::Plain),
-                '\n' => ok(State::Newline),
-                _ if c.is_ascii_whitespace() => ok(State::Whitespace),
+                '\n' => ok(State::Whitespace { newlines: 1 }),
+                _ if c.is_ascii_whitespace() => ok(State::Whitespace { newlines: 0 }),
                 _ if c.is_ascii_alphanumeric() => ok(State::Plain),
                 _ => {
                     println!("{:?}", c);
